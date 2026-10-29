@@ -3,7 +3,7 @@ import worker,{Plaza} from './index';
 import {TICKET_MS,DELETE_MS,QUARANTINE_MS} from './domain';
 function setup(environment='development'){
  const saved=new Map<string,unknown>();
- const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage:{get:async(key:string)=>saved.get(key),put:async(key:string,v:unknown)=>saved.set(key,structuredClone(v)),setAlarm:async()=>{}}};
+ const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage:{get:async(key:string)=>saved.get(key),put:async(key:string,v:unknown)=>saved.set(key,structuredClone(v)),getAlarm:async()=>null,setAlarm:async()=>{}}};
  const plaza=new Plaza(state as any,{ENVIRONMENT:environment} as any);
  const call=async(path:string,body?:unknown,token?:string,method=body===undefined?'GET':'POST',host='localhost')=>{
   const response=await plaza.fetch(new Request(`http://${host}/api${path}`,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{})},body:body===undefined?undefined:JSON.stringify(body)}));

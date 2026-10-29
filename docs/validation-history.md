@@ -37,3 +37,15 @@
 - 最初のE2Eは本番ビルドに開発用ボタンが存在せず2件失敗。開発Viteと独立したDO状態に切り替えて4件成功。テスト環境の分離方法を文書化。
 - 本番構成の `wrangler deploy --env="" --dry-run` 成功。これはデプロイ・クラウド永続化の確認ではない。
 - OAuth最終認可と実アカウントのプラン確認は保留。クラウド公開URLのsmoke test・現地GPS・実機iOSは未実施。
+
+## 2026-10-29: Cloudflare 試験公開
+
+- 公開URL: https://aqualine-mvp.mituba.workers.dev
+- Workers Free（$0 / Current plan）を実アカウントの画面で確認。有料契約・プラン変更なし。
+- Worker: `aqualine-mvp`。SQLite-backed DO: `aqualine-mvp_Plaza`、namespace `6ae425d9b2374581b0e6cc4fe26008a8`。
+- 最終Worker version: `50203c05-a74d-4d77-a7e6-8f8768976f94`。
+- 公開の画面200、未認証の投稿取得401、WebSocket upgrade401、開発バイパス403、範囲外403、別Origin403を確認。Mac Chromeでも公開画面が表示され、開発用入場ボタンは存在しない。
+- Workers Logs / Traces がダッシュボード上で Disabled であることを確認。
+- 休止後のコンストラクターが既存清掃アラームを上書きしないよう修正し、初回の空スナップショット保存を追加。最終コードで型検査・ビルド、23件のサーバーテスト、ローカルHTTP/WebSocket結合、Chrome E2E4件が成功。
+- 永続化の証拠は、ローカルの実Wrangler再起動後の参加券・投稿復元と、クラウドSQLite名前空間へのバインディング確認。公開APIは初期化時の保存を待ってから応答するが、Cloudflareのオブジェクト一覧APIは確認時点で空だったため、クラウド上の保存内容の独立した読取り・再起動後復元まで確認済みとはしない。
+- 公開本番では架空の参加・投稿を作っておらず、現地GPS、実スマートフォン、実利用者の投稿・返信、クラウド上の実投稿保持期間は未検証。

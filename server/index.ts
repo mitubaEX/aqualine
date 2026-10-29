@@ -27,7 +27,7 @@ export class Plaza {
  private committed: Snapshot = {sessions:[],posts:[]};
  private ready: Promise<void>;
  constructor(private state:DurableObjectState,private env:Env){
-  this.ready=state.blockConcurrencyWhile(async()=>{const data=await state.storage.get<Snapshot>('plaza'); if(data){this.restore(data);this.committed=structuredClone(data);} await state.storage.setAlarm(Date.now()+60_000);});
+  this.ready=state.blockConcurrencyWhile(async()=>{const data=await state.storage.get<Snapshot>('plaza'); if(data){this.restore(data);this.committed=structuredClone(data);} else {await state.storage.put('plaza',this.committed);} if(await state.storage.getAlarm()===null)await state.storage.setAlarm(Date.now()+60_000);});
  }
  private serial<T>(fn:()=>Promise<T>):Promise<T>{const result=this.queue.then(fn,fn);this.queue=result.catch(()=>{});return result;}
  async fetch(request:Request){return this.serial(async()=>{try{await this.ready;return await this.route(request);}catch(error){return json({error:error instanceof ApiError ? error.message:'操作を保存できませんでした。しばらくして再試行してください'},error instanceof ApiError?error.status:503);}});}

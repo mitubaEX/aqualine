@@ -9,7 +9,7 @@ function fixture(seed?: any) {
  const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage:{
   get:async(k:string)=>structuredClone(saved.get(k)),
   put:async(k:string,v:any)=>{if(fail){fail=false;throw Error('private storage diagnostic');}saved.set(k,structuredClone(v));},
-  setAlarm:async()=>{},
+  getAlarm:async()=>null,setAlarm:async()=>{},
  }};
  let plaza=new Plaza(state as any,{ENVIRONMENT:'development'} as any);
  const call=async(path:string,body?:any,token?:string,network='fixture-a',method=body===undefined?'GET':'POST')=>{
@@ -23,6 +23,14 @@ function session(){return {id:'owner',name:'テスト',direction:'tokyo',expires
 function post(id='p'){return {id,authorId:'owner',name:'テスト',direction:'tokyo',text:'テスト投稿',createdAt:Date.now(),reactions:{wave:[],thanks:[],same:[]}};}
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();});
 describe('small deployment bounds and persistence',()=>{
+ it('initializes durable storage and preserves an alarm across cold construction',async()=>{
+  const stored=new Map<string,unknown>();const setAlarm=vi.fn();
+  const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage:{get:async(k:string)=>stored.get(k),put:async(k:string,v:unknown)=>{stored.set(k,structuredClone(v));},getAlarm:async()=>Date.now()-1,setAlarm}};
+  const plaza=new Plaza(state as any,{ENVIRONMENT:'production'} as any);
+  expect((await plaza.fetch(new Request('https://example.com/api/posts'))).status).toBe(401);
+  expect(stored.get('plaza')).toEqual({sessions:[],posts:[]});expect(setAlarm).not.toHaveBeenCalled();
+  await plaza.alarm();expect(setAlarm).toHaveBeenCalledTimes(1);
+ });
  it('limits ticket reissue across revocation and restart, then expires anonymous network records',async()=>{
   vi.useFakeTimers();vi.setSystemTime(1_000_000);const f=fixture();
   for(let i=0;i<LIMITS.admissionsPerWindow;i++){
