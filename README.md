@@ -10,6 +10,8 @@
 
 Cloudflare Workers と SQLite-backed Durable Objects を使用し、2026-10-29に Workers Free プランで公開しました。公開版の参加には範囲内の位置確認が必要で、模擬位置ボタンはありません。[保存先・費用・運用手順](docs/technical-notes.md)も確認してください。
 
+公開環境でも、専用の合成測位データによるテストで投稿・別接続からの取得・切断後の再取得と削除を確認済みです。Cloudflare公式APIで保存データの存在も確認しました。これは現地GPSやサーバー再起動後の復元を検証したものではありません。
+
 ## 21秒で見る AquaLine
 
 <img src="docs/demo/aqualine-mobile.gif" width="390" alt="AquaLineのモバイル操作デモ。模擬位置で参加し、架空の文を投稿して、別のテスト参加者が返信する流れ。" />
