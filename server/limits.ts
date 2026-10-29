@@ -2,7 +2,10 @@
 export const LIMITS = {
   sessions: 64, posts: 128, sockets: 64, socketsPerTicket: 2,
   snapshotBytes: 96 * 1024, networkBuckets: 100,
-  admissionsPerWindow: 5, postsPerWindow: 10,
+  admissionsPerWindow: 60, postsPerWindow: 120,
+  reports:128, reportBytes:96*1024, reportThreshold:3,
+  pendingRequests:32, globalRequestsPerMinute:3000,
+  ticketReads:30, ticketMutations:20, ticketRenewals:6, ticketConnections:6, ticketReports:3,
   windowMs: 10 * 60_000, saltEpochMs: 20 * 60_000,
   reactionsPerPost: 64,
 } as const;

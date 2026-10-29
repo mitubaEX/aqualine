@@ -1,9 +1,10 @@
+import {memoryStorage} from './test-storage';
 import {describe,it,expect,beforeEach,afterEach,vi} from 'vitest';
 import worker,{Plaza} from './index';
 import {TICKET_MS,DELETE_MS,QUARANTINE_MS} from './domain';
 function setup(environment='development'){
- const saved=new Map<string,unknown>();
- const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage:{get:async(key:string)=>saved.get(key),put:async(key:string,v:unknown)=>saved.set(key,structuredClone(v)),getAlarm:async()=>null,setAlarm:async()=>{}}};
+ const {saved,storage}=memoryStorage();
+ const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage};
  const plaza=new Plaza(state as any,{ENVIRONMENT:environment} as any);
  const call=async(path:string,body?:unknown,token?:string,method=body===undefined?'GET':'POST',host='localhost')=>{
   const response=await plaza.fetch(new Request(`http://${host}/api${path}`,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{})},body:body===undefined?undefined:JSON.stringify(body)}));
@@ -25,7 +26,8 @@ describe('Durable Object HTTP integration',()=>{
   expect((await call(`/posts/${p.data.id}`,undefined,b.token,'DELETE')).status).toBe(403);
   expect((await call(`/posts/${reply.data.id}`,undefined,b.token,'DELETE')).status).toBe(200);
   expect((await call(`/posts/${p.data.id}/report`,{},b.token)).status).toBe(200);
-  expect((await call('/posts',undefined,a.token)).data.posts).toEqual([]);
+  expect((await call('/posts',undefined,b.token)).data.posts).toEqual([]);
+  expect((await call('/posts',undefined,a.token)).data.posts).toHaveLength(1);
  });
  it('rejects URLs, long posts, spam, invalid replies and unauthenticated reads',async()=>{
   const {call,enter}=setup();const a=await enter();
@@ -54,10 +56,10 @@ describe('Durable Object HTTP integration',()=>{
  });
  it('alarm removes expired sessions and retention records without storing coordinates',async()=>{
   vi.useFakeTimers();vi.setSystemTime(1_000_000);const {call,enter,plaza,saved}=setup();const a=await enter();
-  const p=await call('/posts',{text:'保存期限'},a.token);await call(`/posts/${p.data.id}/report`,{},a.token);
+  const p=await call('/posts',{text:'保存期限'},a.token);const b=await enter();await call(`/posts/${p.data.id}/report`,{},b.token);
   const snapshot=JSON.stringify(saved.get('plaza'));expect(snapshot).not.toContain('accuracy');expect(snapshot).not.toContain('location');
-  vi.advanceTimersByTime(DELETE_MS);await plaza.alarm();expect((saved.get('plaza') as any).posts).toHaveLength(1);expect((saved.get('plaza') as any).sessions).toHaveLength(0);
-  vi.advanceTimersByTime(QUARANTINE_MS);await plaza.alarm();expect((saved.get('plaza') as any).posts).toHaveLength(0);
+  vi.advanceTimersByTime(DELETE_MS);await plaza.alarm();expect((saved.get('plaza') as any).posts).toHaveLength(0);expect(saved.get('reports-v1')).toHaveLength(1);expect((saved.get('plaza') as any).sessions).toHaveLength(0);
+  vi.advanceTimersByTime(QUARANTINE_MS);await plaza.alarm();expect((saved.get('plaza') as any).posts).toHaveLength(0);expect(saved.get('reports-v1')).toHaveLength(0);
  });
  it('rejects cross-origin mutations before forwarding',async()=>{
   const r=await worker.fetch(new Request('https://aqua.example/api/session',{method:'POST',headers:{Origin:'https://evil.example'}}),{} as any);expect(r.status).toBe(403);

@@ -1,23 +1,20 @@
+import {memoryStorage} from './test-storage';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import worker, { Plaza } from './index';
-import { LIMITS } from './limits';
+import { LIMITS, networkKeys } from './limits';
 import { TICKET_MS, DELETE_MS, QUARANTINE_MS } from './domain';
 
 function fixture(seed?: any) {
  const saved=new Map<string,any>();if(seed)saved.set('plaza',structuredClone(seed));
- let fail=false;
- const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage:{
-  get:async(k:string)=>structuredClone(saved.get(k)),
-  put:async(k:string,v:any)=>{if(fail){fail=false;throw Error('private storage diagnostic');}saved.set(k,structuredClone(v));},
-  getAlarm:async()=>null,setAlarm:async()=>{},
- }};
+ const mem=memoryStorage(saved);
+ const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage:mem.storage};
  let plaza=new Plaza(state as any,{ENVIRONMENT:'development'} as any);
  const call=async(path:string,body?:any,token?:string,network='fixture-a',method=body===undefined?'GET':'POST')=>{
   const r=await plaza.fetch(new Request('http://localhost/api'+path,{method,headers:{'X-Aqua-Network':network,...(token?{Authorization:'Bearer '+token}:{})},body:body===undefined?undefined:JSON.stringify(body)}));
   return {status:r.status,data:await r.json() as any,retry:r.headers.get('Retry-After')};
  };
  const enter=async(network='fixture-a')=>call('/session',{passenger:true,direction:'tokyo',dev:true},undefined,network);
- return {saved,call,enter,get plaza(){return plaza;},restart(){plaza=new Plaza(state as any,{ENVIRONMENT:'development'} as any);},failNext(){fail=true;}};
+ return {saved,call,enter,get plaza(){return plaza;},restart(){plaza=new Plaza(state as any,{ENVIRONMENT:'development'} as any);},failNext:mem.failNext};
 }
 function session(){return {id:'owner',name:'テスト',direction:'tokyo',expiresAt:Date.now()+TICKET_MS,posts:[]};}
 function post(id='p'){return {id,authorId:'owner',name:'テスト',direction:'tokyo',text:'テスト投稿',createdAt:Date.now(),reactions:{wave:[],thanks:[],same:[]}};}
@@ -25,7 +22,7 @@ afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();});
 describe('small deployment bounds and persistence',()=>{
  it('initializes durable storage and preserves an alarm across cold construction',async()=>{
   const stored=new Map<string,unknown>();const setAlarm=vi.fn();
-  const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage:{get:async(k:string)=>stored.get(k),put:async(k:string,v:unknown)=>{stored.set(k,structuredClone(v));},getAlarm:async()=>Date.now()-1,setAlarm}};
+  const mem=memoryStorage(stored);const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage:{...mem.storage,getAlarm:async()=>Date.now()-1,setAlarm}};
   const plaza=new Plaza(state as any,{ENVIRONMENT:'production'} as any);
   expect((await plaza.fetch(new Request('https://example.com/api/posts'))).status).toBe(401);
   expect(stored.get('plaza')).toEqual({sessions:[],posts:[]});expect(setAlarm).not.toHaveBeenCalled();
@@ -41,16 +38,15 @@ describe('small deployment bounds and persistence',()=>{
   vi.setSystemTime(1_000_000+LIMITS.windowMs);await f.plaza.alarm();
   expect(f.saved.get('plaza').rates.buckets).toEqual([]);expect((await f.enter()).status).toBe(201);
  });
- it('retains the rolling post budget over ticket reissue, object restart and salt rotation',async()=>{
-  vi.useFakeTimers();vi.setSystemTime(1_000_000);const f=fixture();await f.enter();
-  vi.setSystemTime(1_000_000+LIMITS.saltEpochMs-100_000);const a=await f.enter();
-  for(let i=0;i<LIMITS.postsPerWindow;i++){
-   vi.setSystemTime(1_000_000+LIMITS.saltEpochMs-100_000+i*10_000);
-   expect((await f.call('/posts',{text:'予算 '+i},a.data.token)).status).toBe(201);
-  }
+ it('retains the shared network budget over reissue, restart and salt rotation',async()=>{
+  vi.useFakeTimers();vi.setSystemTime(1_000_000);
+  const rates={salts:[],buckets:[]} as any;const [key]=await networkKeys(rates,'fixture-a',Date.now());
+  vi.setSystemTime(1_000_000+LIMITS.saltEpochMs-20_000);
+  rates.buckets.push([key,{admissions:[],posts:Array(LIMITS.postsPerWindow-1).fill(Date.now())}]);
+  const f=fixture({sessions:[['token',session()]],posts:[],rates});
+  expect((await f.call('/posts',{text:'予算最後'},'token')).status).toBe(201);
   vi.setSystemTime(1_000_000+LIMITS.saltEpochMs);f.restart();const b=await f.enter();
   expect(b.status).toBe(201);expect((await f.call('/posts',{text:'取り直し'},b.data.token)).status).toBe(429);
-  expect(f.saved.get('plaza').rates.salts).toHaveLength(2);
  });
  it('caps active tickets globally without deleting existing participants',async()=>{
   const f=fixture();for(let i=0;i<LIMITS.sessions;i++)expect((await f.enter('n'+i)).status).toBe(201);
@@ -83,8 +79,8 @@ describe('small deployment bounds and persistence',()=>{
  it('cleans only records past their advertised retention deadlines',async()=>{
   vi.useFakeTimers();vi.setSystemTime(1_000_000);const ordinary=post('normal'),reported={...post('report'),reportedAt:Date.now()};
   const f=fixture({sessions:[['token',session()]],posts:[ordinary,reported]});
-  vi.setSystemTime(1_000_000+DELETE_MS);await f.plaza.alarm();expect(f.saved.get('plaza').posts.map((p:any)=>p.id)).toEqual(['report']);
-  vi.setSystemTime(1_000_000+QUARANTINE_MS);await f.plaza.alarm();expect(f.saved.get('plaza').posts).toEqual([]);
+  vi.setSystemTime(1_000_000+DELETE_MS);await f.plaza.alarm();expect(f.saved.get('plaza').posts).toEqual([]);expect(f.saved.get('reports-v1').map((r:any)=>r.post.id)).toEqual(['report']);
+  vi.setSystemTime(1_000_000+QUARANTINE_MS);await f.plaza.alarm();expect(f.saved.get('plaza').posts).toEqual([]);expect(f.saved.get('reports-v1')).toEqual([]);
  });
  it('overwrites forged internal network headers at the Worker boundary',async()=>{
   let received='';const env={ENVIRONMENT:'production',PLAZA:{idFromName:()=>'',get:()=>({fetch:(r:Request)=>{received=r.headers.get('X-Aqua-Network')||'';return new Response('{}');}})}};

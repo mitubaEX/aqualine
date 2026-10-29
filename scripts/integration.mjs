@@ -17,7 +17,7 @@ assert.equal((await api('/posts/'+p.data.id,two.token,undefined,'DELETE')).statu
 assert.equal((await api('/posts/'+p.data.id+'/react',two.token,{reaction:'same'})).status,200);
 const reply=await api('/posts',two.token,{text:'テストの返信',parentId:p.data.id});assert.equal(reply.status,201);
 assert.equal((await api('/posts/'+p.data.id+'/report',two.token,{})).status,200);
-assert.equal((await api('/posts',one.token)).data.posts.some(x=>x.id===p.data.id),false);
+assert.equal((await api('/posts',two.token)).data.posts.some(x=>x.id===p.data.id),false);
 assert.equal((await api('/posts/'+reply.data.id,two.token,undefined,'DELETE')).status,200);
 const before=two.session.expiresAt;
 const unknown=await api('/session/renew',two.token,{location:{lat:0,lng:0,accuracy:1000}});
