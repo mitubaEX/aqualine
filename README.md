@@ -42,7 +42,7 @@ Viteが画面、ローカルWranglerがAPI・Durable Objectsを提供します�
 
 ## 検証と現在の限界
 
-2026-10-29にMacで型検査・ビルド・13件のサーバーテスト・HTTP/WebSocket結合テスト・4件のブラウザE2Eが成功しました。375px・390pxのスマホ幅、横向き相当、デスクトップで確認しています。
+2026-10-29にMacで型検査・ビルド・22件のサーバーテスト・HTTP/WebSocket結合テスト・4件のブラウザE2Eが成功しました。375px・390pxのスマホ幅、横向き相当、デスクトップで確認しています。
 
 ```bash
 npm run typecheck
@@ -52,6 +52,8 @@ npm run build
 npm run test:integration
 CHROMIUM_PATH="/path/to/chromium" npm run test:e2e
 ```
+
+ブラウザ試験は新規参加を5回使います。接続元の参加上限と競合する場合は、独立したローカル状態のWranglerと、それに接続する開発Viteを使ってください（手順は技術メモ）。上限回避のために本番設定を緩めないでください。
 
 MacのGoogle Chromeを使う場合、`CHROMIUM_PATH` は `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` です。
 

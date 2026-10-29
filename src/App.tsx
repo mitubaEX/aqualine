@@ -50,8 +50,8 @@ export default function App() {
   useEffect(() => { if (session && now >= session.expiresAt) endSession('参加チケットの有効期限が切れました。位置情報を再確認してください。'); }, [now, session, endSession]);
   useEffect(() => {
     if (!token || !online) return;
-    let ws: WebSocket | undefined; let retry: ReturnType<typeof setTimeout>; let stopped = false;
-    const connect = () => { ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/events`, ['aqualine', `auth.${token}`]); ws.onopen = () => { setConnected(true); void refresh(); }; ws.onmessage = () => void refresh(); ws.onclose = () => { setConnected(false); if (!stopped) retry = setTimeout(connect, 5000); }; ws.onerror = () => ws?.close(); };
+    let ws: WebSocket | undefined; let retry: ReturnType<typeof setTimeout>; let stopped = false; let retryMs = 5000;
+    const connect = () => { ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/events`, ['aqualine', `auth.${token}`]); ws.onopen = () => { retryMs = 5000; setConnected(true); void refresh(); }; ws.onmessage = () => void refresh(); ws.onclose = () => { setConnected(false); if (!stopped) { retry = setTimeout(connect, retryMs + Math.random() * 1000); retryMs = Math.min(60000, retryMs * 2); } }; ws.onerror = () => ws?.close(); };
     connect(); void refresh(); const poll = setInterval(() => { if (document.visibilityState === 'visible') void refresh(); }, 15000);
     return () => { stopped = true; clearTimeout(retry); clearInterval(poll); ws?.close(); };
   }, [token, online, refresh]);
