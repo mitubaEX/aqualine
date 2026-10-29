@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+const base=process.env.API_URL||'http://127.0.0.1:5173';
+async function api(path, token, body, method=body?'POST':'GET'){
+ const r=await fetch(base+'/api'+path,{method,headers:{Origin:base,...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
+ return {status:r.status,data:await r.json()};
+}
+const one=(await api('/session',null,{passenger:true,direction:'tokyo',dev:true})).data;
+const two=(await api('/session',null,{passenger:true,direction:'kisarazu',dev:true})).data;
+assert.ok(one.token&&two.token,'two riders admitted');
+const ws=new WebSocket(base.replace('http','ws')+'/api/events',['aqualine','auth.'+two.token]);
+await new Promise((resolve,reject)=>{ws.onopen=resolve;ws.onerror=reject;setTimeout(()=>reject(Error('socket connection timeout')),5000).unref()});
+const event=new Promise((resolve,reject)=>{ws.onmessage=resolve;setTimeout(()=>reject(Error('broadcast timeout')),5000).unref()});
+const p=await api('/posts',one.token,{text:'合成位置での自動テスト・ひとこと'});
+assert.equal(p.status,201);await event;
+assert.equal((await api('/posts',one.token,{text:'連投'})).status,429);
+assert.equal((await api('/posts/'+p.data.id,two.token,undefined,'DELETE')).status,403);
+assert.equal((await api('/posts/'+p.data.id+'/react',two.token,{reaction:'same'})).status,200);
+const reply=await api('/posts',two.token,{text:'テストの返信',parentId:p.data.id});assert.equal(reply.status,201);
+assert.equal((await api('/posts/'+p.data.id+'/report',two.token,{})).status,200);
+assert.equal((await api('/posts',one.token)).data.posts.some(x=>x.id===p.data.id),false);
+assert.equal((await api('/posts/'+reply.data.id,two.token,undefined,'DELETE')).status,200);
+const before=two.session.expiresAt;
+const unknown=await api('/session/renew',two.token,{location:{lat:0,lng:0,accuracy:1000}});
+assert.equal(unknown.data.locationStatus,'unknown');assert.equal(unknown.data.session.expiresAt,before);
+const closed=new Promise(resolve=>{ws.onclose=resolve;setTimeout(()=>resolve({code:-1}),5000).unref()});
+assert.equal((await api('/session/renew',two.token,{location:{lat:0,lng:0,accuracy:10}})).status,403);
+assert.equal((await closed).code,4001);
+assert.equal((await api('/posts',two.token)).status,401);
+await api('/session/revoke',one.token,{});
+console.log('PASS: real Worker/DO HTTP + WebSocket admission, broadcast, reply, reaction, authorization, rate limit, report, deletion, uncertain GPS, outside revocation.');
