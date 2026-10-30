@@ -9,7 +9,8 @@ export interface Session { id: string; name: string; direction: Direction; expir
 export interface Post { id: string; authorId: string; name: string; direction: Direction; text: string; parentId?: string; createdAt: number; reactions: Record<Reaction, string[]>; reportedAt?: number }
 // MVP approximation, NOT a surveyed highway boundary. Must be field-validated before launch.
 // A narrow line follows the tunnel and bridge, not a broad bay-wide bounding box.
-export const ROAD = [[35.5199,139.8159],[35.4924,139.8506],[35.4645,139.8753],[35.4468,139.9179]] as const;
+// Bridge: GSI experimental vector road data, edited by AquaLine. See docs/geofence-source.md.
+export const ROAD = [[35.5199,139.8159],[35.4924,139.8506],[35.4645,139.8753],[35.463877,139.8749954],[35.4631998,139.8759985],[35.4616924,139.8782891],[35.4600189,139.8807567],[35.4469489,139.8999667],[35.4412544,139.9083406],[35.43948,139.9109423],[35.4387457,139.9121171],[35.4381164,139.9132866],[35.4375132,139.9146277],[35.4367964,139.9163604],[35.4365604,139.9169344]] as const;
 export function locationStatus(value: unknown): 'inside' | 'outside' | 'unknown' {
   if (!value || typeof value !== 'object') return 'unknown';
   const {lat,lng,accuracy} = value as Location;

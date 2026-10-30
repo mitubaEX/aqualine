@@ -13,3 +13,14 @@ test('429 keeps draft and retry succeeds; report capacity error remains honest w
  await b.route('**/report',route=>route.fulfill({status:503,headers:{'Content-Type':'application/json'},body:JSON.stringify({error:'通報の保存枠が満杯です。通報は保存されませんでした。ミュートを利用してください'})}));
  await post(b,text).getByRole('button',{name:/投稿メニュー/}).click();await b.getByRole('button',{name:'投稿を通報',exact:true}).click();await expect(b.getByRole('alert')).toContainText('保存されませんでした');await expect(post(b,text)).toBeVisible();await post(b,text).getByRole('button',{name:/投稿メニュー/}).click();await b.getByRole('button',{name:'この参加者をミュート'}).click();await expect(post(b,text)).toHaveCount(0);await a.close();await b.close();
 });
+test('public-map bridge position joins without dev bypass, outside and accuracy errors stay distinct',async({browser})=>{
+ const context=await browser.newContext({permissions:['geolocation'],geolocation:{latitude:35.4488717,longitude:139.8970914,accuracy:81},viewport:{width:390,height:844}});
+ const page=await context.newPage();await page.goto('/');await page.getByRole('checkbox').check();
+ await page.getByRole('button',{name:'位置を確認して、広場へ'}).click();await expect(page.getByRole('alert')).toContainText('位置情報の精度が足りません');
+ await context.setGeolocation({latitude:35.4468,longitude:139.9179,accuracy:10});
+ await page.getByRole('button',{name:'位置を確認して、広場へ'}).click();await expect(page.getByRole('alert')).toContainText('アクアラインのエリア外です');
+ await context.setGeolocation({latitude:35.4488717,longitude:139.8970914,accuracy:80});
+ await page.getByRole('button',{name:'位置を確認して、広場へ'}).click();await expect(page.getByRole('heading',{name:'いま、この道の上で'})).toBeVisible();
+ await page.getByText('参加チケット・利用上の注意',{exact:true}).click();await page.getByRole('button',{name:/広場を退出する/}).click();
+ await expect(page.getByRole('heading',{name:'いま、同じ道にいますか？'})).toBeVisible();await context.close();
+});
