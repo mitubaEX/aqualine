@@ -1,13 +1,13 @@
 import {memoryStorage} from './test-storage';
 import {describe,it,expect,beforeEach,afterEach,vi} from 'vitest';
 import worker,{Plaza} from './index';
-import {TICKET_MS,DELETE_MS,QUARANTINE_MS} from './domain';
+import {TICKET_MS,DELETE_MS,QUARANTINE_MS,ROAD} from './domain';
 function setup(environment='development'){
  const {saved,storage}=memoryStorage();
  const state={blockConcurrencyWhile:(fn:()=>Promise<void>)=>fn(),storage};
  const plaza=new Plaza(state as any,{ENVIRONMENT:environment} as any);
  const call=async(path:string,body?:unknown,token?:string,method=body===undefined?'GET':'POST',host='localhost')=>{
-  const response=await plaza.fetch(new Request(`http://${host}/api${path}`,{method,headers:{...(token?{Authorization:`Bearer ${token}`}:{})},body:body===undefined?undefined:JSON.stringify(body)}));
+  const response=await plaza.fetch(new Request(`http://${host}/api${path}`,{method,headers:{...(environment==='production'?{'X-Aqua-Network':'192.0.2.1'}:{}),...(token?{Authorization:`Bearer ${token}`}:{})},body:body===undefined?undefined:JSON.stringify(body)}));
   return {status:response.status,data:await response.json() as any};
  };
  const enter=async()=>{const r=await call('/session',{passenger:true,direction:'tokyo',dev:true});expect(r.status).toBe(201);return r.data;};
@@ -53,6 +53,27 @@ describe('Durable Object HTTP integration',()=>{
   expect((await call('/posts',undefined,a.token)).status).toBe(401);
   const b=await enter();vi.setSystemTime(b.session.expiresAt);
   for(const [path,body]of [['/posts',undefined],['/posts',{text:'期限切れ'}],['/session/renew',{dev:true}],['/posts/fake/report',{}],['/events',undefined]] as const)expect((await call(path,body,b.token)).status).toBe(401);
+ });
+ it('separates entry distance and accuracy without changing uncertain/outside session handling',async()=>{
+  vi.useFakeTimers();vi.setSystemTime(1_000_000);
+  const a=ROAD[6],b=ROAD[7],lat=(a[0]+b[0])/2,lng=(a[1]+b[1])/2;
+  const sx=111320*Math.cos(lat*Math.PI/180),dx=(b[1]-a[1])*sx,dy=(b[0]-a[0])*111320,n=Math.hypot(dx,dy);
+  const location=(metres:number,accuracy:number)=>({lat:lat+metres*dx/n/111320,lng:lng-metres*dy/n/sx,accuracy});
+  const {call}=setup('production');
+  const poor=await call('/session',{passenger:true,direction:'tokyo',location:location(1000,81)});
+  expect(poor.status).toBe(403);expect(poor.data.error).toContain('精度');
+  const entry=await call('/session',{passenger:true,direction:'tokyo',location:location(50,60)});
+  expect(entry.status).toBe(201);const token=entry.data.token;
+  vi.setSystemTime(1_030_000);
+  const renewed=await call('/session/renew',{location:location(50,60)},token);
+  expect(renewed.data.locationStatus).toBe('inside');expect(renewed.data.session.expiresAt).toBe(1_030_000+TICKET_MS);
+  for(const point of [location(1000,81),location(200,60)]){
+   const r=await call('/session/renew',{location:point},token);
+   expect(r.status).toBe(200);expect(r.data.locationStatus).toBe('unknown');expect(r.data.session.expiresAt).toBe(renewed.data.session.expiresAt);
+   expect((await call('/posts',undefined,token)).status).toBe(200);
+  }
+  expect((await call('/session/renew',{location:location(220,60)},token)).status).toBe(403);
+  expect((await call('/posts',undefined,token)).status).toBe(401);
  });
  it('alarm removes expired sessions and retention records without storing coordinates',async()=>{
   vi.useFakeTimers();vi.setSystemTime(1_000_000);const {call,enter,plaza,saved}=setup();const a=await enter();

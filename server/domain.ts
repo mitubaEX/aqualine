@@ -2,6 +2,12 @@ export const TICKET_MS = 20 * 60_000;
 export const VISIBLE_MS = 60 * 60_000;
 export const DELETE_MS = 24 * 60 * 60_000;
 export const QUARANTINE_MS = 30 * DELETE_MS;
+// Geofence policy (metres). Tune these independently of the surveyed/approximated shape.
+export const ENTRY_DISTANCE_METRES = 100;
+export const MAX_LOCATION_ACCURACY_METRES = 80;
+export const EXIT_DISTANCE_METRES = 150;
+export const UMIHOTARU_ENTRY_RADIUS_METRES = 190;
+export const UMIHOTARU_EXIT_RADIUS_METRES = 240;
 export type Direction = 'tokyo' | 'kisarazu';
 export type Reaction = 'wave' | 'thanks' | 'same';
 export interface Location { lat: number; lng: number; accuracy: number }
@@ -14,7 +20,7 @@ export const ROAD = [[35.5199,139.8159],[35.4924,139.8506],[35.4645,139.8753],[3
 export function locationStatus(value: unknown): 'inside' | 'outside' | 'unknown' {
   if (!value || typeof value !== 'object') return 'unknown';
   const {lat,lng,accuracy} = value as Location;
-  if (![lat,lng,accuracy].every(Number.isFinite) || Math.abs(lat)>90 || Math.abs(lng)>180 || accuracy<0 || accuracy>80) return 'unknown';
+  if (![lat,lng,accuracy].every(Number.isFinite) || Math.abs(lat)>90 || Math.abs(lng)>180 || accuracy<0 || accuracy>MAX_LOCATION_ACCURACY_METRES) return 'unknown';
   const scaleX = 111_320 * Math.cos(lat * Math.PI / 180), scaleY = 111_320;
   let distance = Infinity;
   for(let i=1;i<ROAD.length;i++) {
@@ -24,9 +30,10 @@ export function locationStatus(value: unknown): 'inside' | 'outside' | 'unknown'
     distance=Math.min(distance,Math.hypot(ax+t*dx,ay+t*dy));
   }
   const umihotaru=Math.hypot((lng-139.8753)*scaleX,(lat-35.4645)*scaleY);
-  // Require uncertainty circle wholly in entry corridor; boundary ambiguity never renews.
-  if(distance+accuracy<=100 || umihotaru+accuracy<=190) return 'inside';
-  if(distance-accuracy>150 && umihotaru-accuracy>240) return 'outside';
+  // Road entry uses distance independently of accuracy; poor accuracy was rejected above.
+  // Preserve the PA uncertainty-circle rule and conservative exit hysteresis.
+  if(distance<=ENTRY_DISTANCE_METRES || umihotaru+accuracy<=UMIHOTARU_ENTRY_RADIUS_METRES) return 'inside';
+  if(distance-accuracy>EXIT_DISTANCE_METRES && umihotaru-accuracy>UMIHOTARU_EXIT_RADIUS_METRES) return 'outside';
   return 'unknown';
 }
 export function validText(value: unknown): string {

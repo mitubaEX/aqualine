@@ -30,9 +30,20 @@ describe('public-map bridge regression',()=>{
   const a=ROAD[6],b=ROAD[7],lat=(a[0]+b[0])/2,lng=(a[1]+b[1])/2;
   const sx=111320*Math.cos(lat*Math.PI/180),dx=(b[1]-a[1])*sx,dy=(b[0]-a[0])*111320,n=Math.hypot(dx,dy);
   const offset=(m:number)=>[lat+m*dx/n/111320,lng-m*dy/n/sx];
-  expect(status(offset(89),10)).toBe('inside');expect(status(offset(91),10)).toBe('unknown');
+  expect(status(offset(50),60)).toBe('inside');
+  // +/- 1cm avoids pretending projected floating-point coordinates are exact surveyed metres.
+  expect(status(offset(99.99),80)).toBe('inside');expect(status(offset(100.01),80)).toBe('unknown');
+  expect(status(offset(50),80)).toBe('inside');expect(status(offset(50),80.01)).toBe('unknown');
   expect(status(offset(159),10)).toBe('unknown');expect(status(offset(161),10)).toBe('outside');
-  expect(status(offset(0),500)).toBe('unknown');
+  expect(status(offset(0),500)).toBe('unknown');expect(status(offset(1000),500)).toBe('unknown');
+ });
+ it('preserves the separate PA uncertainty-circle admission and exit rules',()=>{
+  const east=(metres:number)=>[35.4645,139.8753+metres/(111320*Math.cos(35.4645*Math.PI/180))];
+  expect(status(east(160),20)).toBe('inside');
+  expect(status(east(160),40)).toBe('unknown');
+  expect(status(east(249),10)).toBe('unknown');
+  expect(status(east(251),10)).toBe('outside');
+  expect(status(east(1000),81)).toBe('unknown');
  });
  it('keeps the existing tunnel vertices and PA special area unchanged',()=>{
   expect(ROAD.slice(0,3)).toEqual([[35.5199,139.8159],[35.4924,139.8506],[35.4645,139.8753]]);
