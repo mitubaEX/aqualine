@@ -75,6 +75,32 @@ describe('Durable Object HTTP integration',()=>{
   expect((await call('/session/renew',{location:location(220,60)},token)).status).toBe(403);
   expect((await call('/posts',undefined,token)).status).toBe(401);
  });
+ it('restores without renewal, survives restart, and rejects expired tickets despite client clocks',async()=>{
+  vi.useFakeTimers();const start=1_000_000;vi.setSystemTime(start);
+  const {call,enter,saved}=setup();const ticket=await enter();
+  expect(ticket.session.expiresAt).toBe(start+60*60_000);
+  for(const elapsed of [5,20,59]){
+   vi.setSystemTime(start+elapsed*60_000);
+   const r=await call('/session/renew',{location:{lat:0,lng:0,accuracy:500},expiresAt:9e15,serverNow:0},ticket.token);
+   expect(r.data.session.expiresAt).toBe(ticket.session.expiresAt);
+   const check=await call('/session',undefined,ticket.token);
+   expect(check.data.session.expiresAt).toBe(ticket.session.expiresAt);expect(check.data.session.serverNow).toBe(Date.now());
+  }
+  const {storage}=memoryStorage(saved);const restarted=new Plaza({storage,blockConcurrencyWhile:(fn:any)=>fn()} as any,{ENVIRONMENT:'development'} as any);
+  const get=()=>restarted.fetch(new Request('http://localhost/api/session',{headers:{Authorization:'Bearer '+ticket.token}}));
+  vi.setSystemTime(ticket.session.expiresAt-1);expect((await get()).status).toBe(200);
+  vi.setSystemTime(ticket.session.expiresAt);expect((await get()).status).toBe(401);
+  expect((await call('/session/renew',{dev:true,expiresAt:9e15},ticket.token)).status).toBe(401);
+ });
+ it('does not upgrade legacy 20-minute tickets during restoration or resurrect expired ones',async()=>{
+  vi.useFakeTimers();vi.setSystemTime(1_000_000);
+  const {saved,storage}=memoryStorage();
+  saved.set('plaza',{sessions:[['legacy',{id:'legacy',name:'legacy',direction:'tokyo',expiresAt:2_200_000,posts:[]}]],posts:[]});
+  const plaza=new Plaza({storage,blockConcurrencyWhile:(fn:any)=>fn()} as any,{ENVIRONMENT:'development'} as any);
+  const check=()=>plaza.fetch(new Request('http://localhost/api/session',{headers:{Authorization:'Bearer legacy'}}));
+  const r=await check();expect(r.status).toBe(200);expect((await r.json() as any).session.expiresAt).toBe(2_200_000);
+  vi.setSystemTime(2_200_000);expect((await check()).status).toBe(401);
+ });
  it('alarm removes expired sessions and retention records without storing coordinates',async()=>{
   vi.useFakeTimers();vi.setSystemTime(1_000_000);const {call,enter,plaza,saved}=setup();const a=await enter();
   const p=await call('/posts',{text:'保存期限'},a.token);const b=await enter();await call(`/posts/${p.data.id}/report`,{},b.token);

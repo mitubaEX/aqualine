@@ -63,7 +63,7 @@ export class Plaza {
   }catch(error){this.metrics.record(error instanceof ApiError?error.status:503);return json({error:error instanceof ApiError?error.message:'操作を保存できませんでした。しばらくして再試行してください'},error instanceof ApiError?error.status:503);}
   finally{this.pending--;}
  }
- private publicSession(s:Session){return {id:s.id,name:s.name,direction:s.direction,expiresAt:s.expiresAt};}
+ private publicSession(s:Session){return {id:s.id,name:s.name,direction:s.direction,expiresAt:s.expiresAt,serverNow:Date.now()};}
  private token(request:Request){return request.headers.get('Authorization')?.replace(/^Bearer /,'') || request.headers.get('Sec-WebSocket-Protocol')?.split(',').map(x=>x.trim()).find(x=>x.startsWith('auth.'))?.slice(5) || '';}
  private auth(token:string){const s=this.sessions.get(token);if(!s || s.expiresAt<=Date.now()){this.closeToken(token);throw new ApiError(401,'参加時間が終了しました。位置情報を確認して入り直してください');} return s;}
  private restore(data: Snapshot) {
@@ -166,6 +166,7 @@ export class Plaza {
   const token=this.token(request),session=this.auth(token);
   if(path!=='/api/session/revoke')await this.ticketRate(session,
    path==='/api/events'?'connections':path==='/api/session/renew'?'renewals':method==='GET'?'reads':path.endsWith('/report')?'reports':'mutations',now);
+  if(path==='/api/session'&&method==='GET')return json({session:this.publicSession(session)});
   if(path==='/api/session/revoke'&&method==='POST'){this.sessions.delete(token);this.closeToken(token);await this.save();return json({ok:true});}
   if(path==='/api/session/renew'&&method==='POST'){
    const status=this.location(body,request);

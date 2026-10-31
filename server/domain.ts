@@ -1,4 +1,4 @@
-export const TICKET_MS = 20 * 60_000;
+export const TICKET_MS = 60 * 60_000;
 export const VISIBLE_MS = 60 * 60_000;
 export const DELETE_MS = 24 * 60 * 60_000;
 export const QUARANTINE_MS = 30 * DELETE_MS;
