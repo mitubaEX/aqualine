@@ -21,7 +21,7 @@ test('public-map bridge position joins without dev bypass, outside and accuracy 
  await page.getByRole('button',{name:'位置を確認して、広場へ'}).click();await expect(page.getByRole('alert')).toContainText('アクアラインのエリア外です');
  await context.setGeolocation({latitude:35.4488717,longitude:139.8970914,accuracy:80});
  await page.getByRole('button',{name:'位置を確認して、広場へ'}).click();await expect(page.getByRole('heading',{name:'いま、この道の上で'})).toBeVisible();
- await page.getByText('参加チケット・利用上の注意',{exact:true}).click();await page.getByRole('button',{name:/広場を退出する/}).click();
+ await page.getByText('参加チケット・利用上の注意',{exact:true}).click();await page.getByRole('button',{name:'退出する',exact:true}).click();
  await expect(page.getByRole('heading',{name:'いま、同じ道にいますか？'})).toBeVisible();await context.close();
 });
 
@@ -39,7 +39,7 @@ test('same-tab reload validates server ticket without GPS or renewal; clock chan
  await page.evaluate(()=>{Date.now=()=>9e15;});await expect(page.getByRole('heading',{name:'いま、この道の上で'})).toBeVisible();
  await context.setOffline(true);await expect(page.getByText('オフラインです。再接続すると更新されます。送信はできません。')).toBeVisible();
  await context.setOffline(false);await expect(page.locator('.connection')).toHaveText('LIVE');expect(renewals).toBe(0);
- await page.getByText('参加チケット・利用上の注意',{exact:true}).click();await page.getByRole('button',{name:/広場を退出する/}).click();
+ await page.getByText('参加チケット・利用上の注意',{exact:true}).click();await page.getByRole('button',{name:'退出する',exact:true}).click();
  await expect(page.getByRole('heading',{name:'いま、同じ道にいますか？'})).toBeVisible();
  expect(await page.evaluate(()=>sessionStorage.getItem('aqualine.ticket.v1'))).toBeNull();
 });
@@ -61,4 +61,32 @@ test('repeated geolocation failures keep the same deadline and show GPS uncertai
  await page.evaluate(()=>Object.defineProperty(navigator,'geolocation',{configurable:true,value:{getCurrentPosition:(_s:unknown,e:(x:unknown)=>void)=>e({code:2})}}));
  for(let i=0;i<2;i++){await page.clock.fastForward(61_000);await expect(page.getByText('現在地を確認できないため、チケットは延長されていません。有効期限までは参加できます。')).toBeVisible();expect(await expiry()).toBe(before);}
  expect(renewals).toBe(0);await expect(page.locator('.ticket-compact')).toContainText('位置未確認・猶予中');await expect(page.locator('.connection')).toHaveText('LIVE');
+});
+test('header exit stays visible at 320/390px and short viewport; failure preserves session and successful exit revokes it',async({page,context})=>{
+ await page.setViewportSize({width:320,height:700});await join(page);
+ const exit=page.getByRole('button',{name:'退出する',exact:true});await expect(exit).toBeVisible();await expect(page.locator('.ride-details')).not.toHaveAttribute('open','');
+ for(const width of [320,390,1280]){
+  await page.setViewportSize({width,height:width===1280?800:380});await page.getByLabel('ひとこと',{exact:true}).focus();await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+  const box=await exit.boundingBox();expect(box!.y).toBeGreaterThanOrEqual(0);expect(box!.y+box!.height).toBeLessThan(100);expect(box!.height).toBeGreaterThanOrEqual(44);expect(box!.width).toBeGreaterThanOrEqual(44);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+ }
+ for(const width of [320,390]){await page.setViewportSize({width,height:844});await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await page.screenshot({path:`/tmp/aqua-exit-after${width}.png`});}
+ await context.setOffline(true);await expect(exit).toBeDisabled();await context.setOffline(false);await expect(exit).toBeEnabled();
+ let fail=true;let calls=0;
+ await page.route('**/api/session/revoke',async route=>{calls++;if(fail)await route.fulfill({status:503,json:{error:'退出を保存できませんでした'}});else{await new Promise(r=>setTimeout(r,150));await route.continue();}});
+ await exit.click();await expect(page.getByRole('alert')).toContainText('退出を保存できませんでした');await expect(page.locator('.plaza')).toBeVisible();await expect(exit).toBeEnabled();
+ expect(await page.evaluate(()=>!!sessionStorage.getItem('aqualine.ticket.v1'))).toBe(true);
+ fail=false;await exit.click();await expect(page.getByRole('button',{name:'退出中…'})).toBeDisabled();
+ await expect(page.getByRole('heading',{name:'いま、同じ道にいますか？'})).toBeVisible();expect(calls).toBe(2);
+ await expect(page.getByRole('button',{name:'位置を確認して、広場へ'})).toBeFocused();expect(await page.evaluate(()=>sessionStorage.getItem('aqualine.ticket.v1'))).toBeNull();
+ await page.reload();await expect(page.locator('.plaza')).toHaveCount(0);await expect(page.getByRole('button',{name:'退出する',exact:true})).toHaveCount(0);
+});
+
+test('Android-like narrow view keeps reaction labels with and without counts',async({browser})=>{
+ const context=await browser.newContext({viewport:{width:360,height:800},isMobile:true,hasTouch:true,deviceScaleFactor:2,userAgent:'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'});
+ const page=await context.newPage();await join(page);const text='UI検証用のひとこと '+Date.now();await page.getByLabel('ひとこと',{exact:true}).fill(text);await page.getByRole('button',{name:'ひとこと送る'}).click();const item=post(page,text);await expect(item).toBeVisible();
+ for(const width of [320,360,390]){await page.setViewportSize({width,height:800});for(const label of ['やっほー','ありがとう','わかる'])await expect(item.getByRole('button',{name:label,exact:true}).locator('.reaction-label')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);}
+ await item.getByRole('button',{name:'ありがとう',exact:true}).click();await expect(item.getByRole('button',{name:'ありがとう',exact:true})).toHaveText(/ありがとう1/);await expect(item.locator('.reaction-label').filter({hasText:'ありがとう'})).toBeVisible();
+ await page.setViewportSize({width:360,height:800});await item.evaluate(el=>window.scrollTo(0,window.scrollY+el.getBoundingClientRect().top-100));await page.getByRole('button',{name:'お知らせを閉じる'}).click();await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));await page.screenshot({path:'/tmp/aqua-android-labels360.png'});
+ page.on('dialog',d=>d.accept());await item.getByRole('button',{name:/投稿メニュー/}).click();await page.getByRole('button',{name:'自分の投稿を削除'}).click();await expect(item).toHaveCount(0);await page.getByRole('button',{name:'退出する',exact:true}).click();await expect(page.locator('.plaza')).toHaveCount(0);await context.close();
 });

@@ -1,3 +1,4 @@
+import { APPROACH_ROADS } from './approach-roads';
 export const TICKET_MS = 60 * 60_000;
 export const VISIBLE_MS = 60 * 60_000;
 export const DELETE_MS = 24 * 60 * 60_000;
@@ -14,17 +15,18 @@ export interface Location { lat: number; lng: number; accuracy: number }
 export interface Session { id: string; name: string; direction: Direction; expiresAt: number; posts: number[] }
 export interface Post { id: string; authorId: string; name: string; direction: Direction; text: string; parentId?: string; createdAt: number; reactions: Record<Reaction, string[]>; reportedAt?: number }
 // MVP approximation, NOT a surveyed highway boundary. Must be field-validated before launch.
-// A narrow line follows the tunnel and bridge, not a broad bay-wide bounding box.
+// Corrected bridge retained; tunnel and approach branches are independent source polylines.
 // Bridge: GSI experimental vector road data, edited by AquaLine. See docs/geofence-source.md.
-export const ROAD = [[35.5199,139.8159],[35.4924,139.8506],[35.4645,139.8753],[35.463877,139.8749954],[35.4631998,139.8759985],[35.4616924,139.8782891],[35.4600189,139.8807567],[35.4469489,139.8999667],[35.4412544,139.9083406],[35.43948,139.9109423],[35.4387457,139.9121171],[35.4381164,139.9132866],[35.4375132,139.9146277],[35.4367964,139.9163604],[35.4365604,139.9169344]] as const;
+export const ROAD = [[35.463877,139.8749954],[35.4631998,139.8759985],[35.4616924,139.8782891],[35.4600189,139.8807567],[35.4469489,139.8999667],[35.4412544,139.9083406],[35.43948,139.9109423],[35.4387457,139.9121171],[35.4381164,139.9132866],[35.4375132,139.9146277],[35.4367964,139.9163604],[35.4365604,139.9169344]] as const;
+export const ROADS = [ROAD, ...APPROACH_ROADS];
 export function locationStatus(value: unknown): 'inside' | 'outside' | 'unknown' {
   if (!value || typeof value !== 'object') return 'unknown';
   const {lat,lng,accuracy} = value as Location;
   if (![lat,lng,accuracy].every(Number.isFinite) || Math.abs(lat)>90 || Math.abs(lng)>180 || accuracy<0 || accuracy>MAX_LOCATION_ACCURACY_METRES) return 'unknown';
   const scaleX = 111_320 * Math.cos(lat * Math.PI / 180), scaleY = 111_320;
   let distance = Infinity;
-  for(let i=1;i<ROAD.length;i++) {
-    const a=ROAD[i-1],b=ROAD[i];
+  for(const road of ROADS) for(let i=1;i<road.length;i++) {
+    const a=road[i-1],b=road[i];
     const ax=(a[1]-lng)*scaleX, ay=(a[0]-lat)*scaleY, bx=(b[1]-lng)*scaleX, by=(b[0]-lat)*scaleY;
     const dx=bx-ax,dy=by-ay,t=Math.max(0,Math.min(1,-(ax*dx+ay*dy)/(dx*dx+dy*dy)));
     distance=Math.min(distance,Math.hypot(ax+t*dx,ay+t*dy));

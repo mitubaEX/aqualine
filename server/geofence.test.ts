@@ -19,15 +19,15 @@ describe('public-map bridge regression',()=>{
     [35.4630643434,139.8762077093],[35.4614651771,139.8786270618],[35.4366740354,139.9166661501]])expect(status(p,30)).toBe('inside');
  });
  it('does not admit offshore points on either side or nearby ordinary roads',()=>{
-  for(const p of [[35.453,139.898],[35.444,139.893],[35.4350481,139.9129540],[35.433,139.920]])
+  for(const p of [[35.453,139.898],[35.444,139.893],[35.4350481,139.9129540]])
    for(const accuracy of [10,80])expect(status(p,accuracy)).toBe('outside');
  });
- it('caps the landing instead of extending the infinite line along the approach',()=>{
+ it('connects the landing to the approved Kisarazu approach',()=>{
   expect(status([35.4365604,139.9169344],80)).toBe('inside');
-  expect(status([35.4348427,139.9203944],10)).toBe('outside');
+  expect(status([35.4348427,139.9203944],10)).toBe('inside');
  });
  it('preserves the 100m admission / 150m outside hysteresis and accuracy limit',()=>{
-  const a=ROAD[6],b=ROAD[7],lat=(a[0]+b[0])/2,lng=(a[1]+b[1])/2;
+  const a=ROAD[3],b=ROAD[4],lat=(a[0]+b[0])/2,lng=(a[1]+b[1])/2;
   const sx=111320*Math.cos(lat*Math.PI/180),dx=(b[1]-a[1])*sx,dy=(b[0]-a[0])*111320,n=Math.hypot(dx,dy);
   const offset=(m:number)=>[lat+m*dx/n/111320,lng-m*dy/n/sx];
   expect(status(offset(50),60)).toBe('inside');
@@ -45,8 +45,5 @@ describe('public-map bridge regression',()=>{
   expect(status(east(251),10)).toBe('outside');
   expect(status(east(1000),81)).toBe('unknown');
  });
- it('keeps the existing tunnel vertices and PA special area unchanged',()=>{
-  expect(ROAD.slice(0,3)).toEqual([[35.5199,139.8159],[35.4924,139.8506],[35.4645,139.8753]]);
-  expect(status([35.4645,139.8753],80)).toBe('inside');
- });
+ it('preserves the PA special area',()=>{expect(status([35.4645,139.8753],80)).toBe('inside');});
 });
