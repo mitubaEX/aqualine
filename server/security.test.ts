@@ -50,7 +50,7 @@ describe('report isolation and durable abuse limits',()=>{
   expect(f.saved.get('reports-v1')).toEqual([report]);
   expect((await f.call('/posts','a',{text:'normal remains available'})).status).toBe(201);
  });
- it('clears short-lived voting identifiers at 60 minutes but keeps report until 30 days',async()=>{
+ it('clears short-lived voting identifiers at 24 hours but keeps report until 30 days',async()=>{
   vi.useFakeTimers();vi.setSystemTime(1_000_000);const f=setup();const a=await f.enter(),b=await f.enter();
   const id=(await f.call('/posts',a,{text:'test'})).data.id;await f.call('/posts/'+id+'/report',b,{});
   const at=f.saved.get('reports-v1')[0].reportedAt;

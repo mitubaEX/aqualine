@@ -139,3 +139,13 @@ describe('WebSocket lifetime',()=>{
   await call('/session/renew',{location:{lat:36,lng:140,accuracy:5}},a.token);expect(server!.closed).toBe(4001);
  });
 });
+
+
+describe('24-hour message lifetime',()=>{
+ it('keeps an hour-old post available to a fresh ticket and expires at exactly 24h',async()=>{
+  vi.useFakeTimers();const start=1_000_000;vi.setSystemTime(start);const f=setup(),a=await f.enter();await f.call('/posts',{text:'一日残る'},a.token);
+  vi.setSystemTime(start+3_600_000);const b=await f.enter();expect((await f.call('/posts',undefined,b.token)).data.posts).toHaveLength(1);
+  vi.setSystemTime(start+86_400_000-1);const c=await f.enter();expect((await f.call('/posts',undefined,c.token)).data.posts).toHaveLength(1);
+  vi.setSystemTime(start+86_400_000);expect((await f.call('/posts',undefined,c.token)).data.posts).toHaveLength(0);await f.plaza.alarm();expect(f.saved.get('plaza').posts).toHaveLength(0);
+ });
+});

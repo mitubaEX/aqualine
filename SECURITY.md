@@ -37,7 +37,7 @@ AquaLine は乗客向けの試験公開 MVP です。位置証明、本人確認
 
 保存するのは参加券と匿名セッション、投稿・方向タグ・投稿時刻・返信参照・リアクション・通報時刻などのアプリ状態です。位置座標・生IPは判定後に保存しません。接続元制限の短命ハッシュ・ソルト・時刻カウンターも保存します（詳細は docs/technical-notes.md）。匿名表示名は「匿名化済み」の保証ではなく、本文や時刻などから個人が推測される可能性があります。氏名、連絡先、車両を特定する情報を投稿しないでください。
 
-未通報投稿は投稿から 24 時間、通報投稿は通報から 30 日で削除対象となります。通常表示は投稿から 60 分までです。通報の最初の受付時刻を保持し、後続通報で30日期限を延長しません。通報用ソルト・接続元ハッシュ・通報者IDは表示期間終了後に清掃します。通報保存が満杯なら503で明示し、ミュートを案内します。削除の定期処理には遅れがあり、基盤のバックアップ等はこの実装の外にあります。
+未通報投稿は投稿から 24 時間、通報投稿は通報から 30 日で削除対象となります。通常表示も投稿から 24 時間までです。通報の最初の受付時刻を保持し、後続通報で30日期限を延長しません。通報用ソルト・接続元ハッシュ・通報者IDは表示期間終了後に清掃します。通報保存が満杯なら503で明示し、ミュートを案内します。削除の定期処理には遅れがあり、基盤のバックアップ等はこの実装の外にあります。
 
 ## ローカル検証と本番の分離
 
@@ -53,3 +53,14 @@ AquaLine は乗客向けの試験公開 MVP です。位置証明、本人確認
 これらは構成の参考資料です。アプリ固有の安全性や位置判定の正確性を保証するものではありません。
 
 日別の数値集計のみを同じDOの `aqua_daily` に7日分保存します。ログや公開監視APIへ個人情報を出しません。集計の欠落や対象範囲、移行とロールバック上の注意は [技術メモ](docs/technical-notes.md) を参照してください。
+
+
+## フィードバック
+
+参加や位置確認を必要としない送信口です。本文1〜500文字、同じ接続元から10分に3件、40件／96 KiBの別保存枠、30日保持。生IPは保存せず短命ソルト付きハッシュを制限に使います。基盤ログは対象外です。管理APIは32文字以上の専用シークレットがなければ閉じたままです。本文をHTMLとして返さず、JSONで提供します。[運用手順](docs/feedback.md)を参照。通知配信・監視の自動設定は行いません。
+
+## Public congestion summary exception
+
+Only `GET /api/congestion` bypasses participant authentication. It returns fixed-label counts by direction for the last 15 minutes, window/creation time and ticket-deduplicated sample size. Label counts are suppressed below three samples. It never returns posts, text, names, author/session IDs, or coordinates. All post reads/mutations still require an unexpired ticket; status-only posts use the existing posting, shared-network and request limits. Direction and timestamps are server-derived. Public aggregate requests remain bounded by global request and pending-work limits. Existing operational metrics remain private.
+
+Aggregation derives from live posts, so deletes and quarantine are reflected without a separate identifying record. It does not guarantee differential privacy: repeated observations and externally known reports could permit inferences. Ticket re-issuance can inflate counts, and ticket validity does not prove a reporter's current position. The UI states these limitations and never equates missing samples with an empty road.

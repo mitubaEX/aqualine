@@ -1,7 +1,10 @@
+import { congestionSummary, validCongestion } from './congestion';
+import { CONGESTION_LABELS } from '../src/congestion';
+import { feedbackRoute, cleanFeedback } from './feedback';
 import { Metrics } from './metrics';
 import { LIMITS, cleanRates, networkKeys, type RateState } from './limits';
 import { TICKET_MS, VISIBLE_MS, QUARANTINE_MS, locationStatus, postingAllowed, retained, validText, visible, type Session, type Post, type Reaction } from './domain';
-interface Env { PLAZA: DurableObjectNamespace; ENVIRONMENT?: string; ASSETS?: Fetcher }
+interface Env { PLAZA: DurableObjectNamespace; ENVIRONMENT?: string; FEEDBACK_ADMIN_TOKEN?: string; ASSETS?: Fetcher }
 interface Snapshot { sessions: [string,Session][]; posts: Post[]; rates?: RateState }
 interface Report { post:Post; reportedAt:number; reporters:string[]; networks:string[]; salt?:string; quarantined:boolean }
 interface Usage { expiresAt:number; minute:number; reads:number; mutations:number; renewals:number; connections:number; reportWindow:number; reports:number }
@@ -153,6 +156,7 @@ export class Plaza {
  }
  private async route(request:Request,body:any):Promise<Response>{
   const url=new URL(request.url),path=url.pathname,method=request.method,now=Date.now();
+  const feedback=await feedbackRoute(request,body,this.state.storage,this.env.FEEDBACK_ADMIN_TOKEN);if(feedback)return feedback;
   if(path==='/api/session'&&method==='POST'){
    this.clean(now);
    if(body.passenger!==true)throw new ApiError(400,'運転していない同乗者のみ参加できます');
@@ -163,6 +167,7 @@ export class Plaza {
    const token=crypto.randomUUID()+crypto.randomUUID().replaceAll('-','');
    const id=crypto.randomUUID(),s:Session={id,name:`波待ち ${id.slice(0,4).toUpperCase()}`,direction:body.direction,expiresAt:now+TICKET_MS,posts:[]};this.sessions.set(token,s);await this.save();return json({token,session:this.publicSession(s)},201);
   }
+  if(path==='/api/congestion'&&method==='GET')return json(congestionSummary(this.posts,now));
   const token=this.token(request),session=this.auth(token);
   if(path!=='/api/session/revoke')await this.ticketRate(session,
    path==='/api/events'?'connections':path==='/api/session/renew'?'renewals':method==='GET'?'reads':path.endsWith('/report')?'reports':'mutations',now);
@@ -184,16 +189,16 @@ export class Plaza {
    server.addEventListener('error',()=>this.release(server));
    return new Response(null,{status:101,webSocket:client,headers:{'Sec-WebSocket-Protocol':'aqualine'}});
   }
-  if(path==='/api/posts'&&method==='GET')return json({posts:this.posts.filter(p=>visible(p,now)&&!this.reports.some(r=>r.post.id===p.id&&r.reporters.includes(session.id))).map(p=>({id:p.id,authorId:p.authorId,name:p.name,direction:p.direction,text:p.text,parentId:p.parentId,createdAt:p.createdAt,mine:p.authorId===session.id,reactions:Object.fromEntries(Object.entries(p.reactions).map(([k,v])=>[k,v.length])),myReactions:Object.entries(p.reactions).filter(([,v])=>v.includes(session.id)).map(([k])=>k)})).reverse()});
+  if(path==='/api/posts'&&method==='GET')return json({posts:this.posts.filter(p=>visible(p,now)&&!this.reports.some(r=>r.post.id===p.id&&r.reporters.includes(session.id))).map(p=>({id:p.id,authorId:p.authorId,name:p.name,direction:p.direction,text:p.text,congestion:p.congestion,parentId:p.parentId,createdAt:p.createdAt,mine:p.authorId===session.id,reactions:Object.fromEntries(Object.entries(p.reactions).map(([k,v])=>[k,v.length])),myReactions:Object.entries(p.reactions).filter(([,v])=>v.includes(session.id)).map(([k])=>k)})).reverse()});
   if(path==='/api/posts'&&method==='POST'){
    this.clean(now);
-   let text:string;try{text=validText(body.text);}catch(e){throw new ApiError(400,e instanceof Error?e.message:'本文が不正です');}
+   let text:string,congestion;try{congestion=validCongestion(body.congestion);text=validText(congestion && (body.text===undefined || body.text==='') ? CONGESTION_LABELS[congestion] : body.text);}catch(e){throw new ApiError(400,e instanceof Error?e.message:'本文が不正です');}
    if(body.parentId!==undefined && (typeof body.parentId!=='string'||body.parentId.length>64))throw new ApiError(400,'返信先が不正です');
    if(!postingAllowed(session,now))throw new ApiError(429,'投稿は10秒あけて、10分に10件までです');
    if(body.parentId && !this.posts.some(p=>p.id===body.parentId&&visible(p,now)))throw new ApiError(404,'返信先の投稿は表示期間を終了しました');
    if(this.posts.length>=LIMITS.posts)throw new ApiError(503,'広場の保存件数が上限です。既存の投稿は保持しています。時間をおいてお試しください');
    await this.rate(request,'posts',now);
-   const post:Post={id:crypto.randomUUID(),authorId:session.id,name:session.name,direction:session.direction,text,parentId:body.parentId||undefined,createdAt:now,reactions:{wave:[],thanks:[],same:[]}};
+   const post:Post={id:crypto.randomUUID(),authorId:session.id,name:session.name,direction:session.direction,text,congestion,parentId:body.parentId||undefined,createdAt:now,reactions:{wave:[],thanks:[],same:[]}};
    this.posts.push(post);session.posts=session.posts.filter(t=>now-t<600_000);session.posts.push(now);await this.save();this.broadcast();return json({id:post.id},201);
   }
   const match=path.match(/^\/api\/posts\/([^/]+)(?:\/(react|report))?$/);
@@ -206,5 +211,5 @@ export class Plaza {
   }
   throw new ApiError(404,'見つかりません');
  }
- async alarm(){await this.ready;await this.serial(async()=>{this.metrics.flush();this.clean();await this.save();for(const [id,u]of Object.entries(this.usage))if(u.expiresAt<=Date.now())delete this.usage[id];await this.state.storage.put('usage-v1',this.usage);this.broadcast();await this.state.storage.setAlarm(Date.now()+60_000);});}
+ async alarm(){await this.ready;await this.serial(async()=>{try{await cleanFeedback(this.state.storage,Date.now());this.metrics.flush();this.clean();await this.save();for(const [id,u]of Object.entries(this.usage))if(u.expiresAt<=Date.now())delete this.usage[id];await this.state.storage.put('usage-v1',this.usage);this.broadcast();}finally{await this.state.storage.setAlarm(Date.now()+60_000);}});}
 }

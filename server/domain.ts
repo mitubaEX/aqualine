@@ -1,7 +1,9 @@
+import type { CongestionLevel } from '../src/congestion';
+import { MESSAGE_LIFETIME_MS } from '../src/lifetime';
 import { APPROACH_ROADS } from './approach-roads';
 export const TICKET_MS = 60 * 60_000;
-export const VISIBLE_MS = 60 * 60_000;
-export const DELETE_MS = 24 * 60 * 60_000;
+export const VISIBLE_MS = MESSAGE_LIFETIME_MS;
+export const DELETE_MS = VISIBLE_MS;
 export const QUARANTINE_MS = 30 * DELETE_MS;
 // Geofence policy (metres). Tune these independently of the surveyed/approximated shape.
 export const ENTRY_DISTANCE_METRES = 100;
@@ -13,7 +15,7 @@ export type Direction = 'tokyo' | 'kisarazu';
 export type Reaction = 'wave' | 'thanks' | 'same';
 export interface Location { lat: number; lng: number; accuracy: number }
 export interface Session { id: string; name: string; direction: Direction; expiresAt: number; posts: number[] }
-export interface Post { id: string; authorId: string; name: string; direction: Direction; text: string; parentId?: string; createdAt: number; reactions: Record<Reaction, string[]>; reportedAt?: number }
+export interface Post { id: string; authorId: string; name: string; direction: Direction; text: string; congestion?: CongestionLevel; parentId?: string; createdAt: number; reactions: Record<Reaction, string[]>; reportedAt?: number }
 // MVP approximation, NOT a surveyed highway boundary. Must be field-validated before launch.
 // Corrected bridge retained; tunnel and approach branches are independent source polylines.
 // Bridge: GSI experimental vector road data, edited by AquaLine. See docs/geofence-source.md.

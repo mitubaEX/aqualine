@@ -33,3 +33,12 @@ body{background:radial-gradient(ellipse at 0 0,#d7eef3,transparent 65%),#f1f6f8;
 
 /* Keep reaction meanings visible even on narrow screens and after a vote. */
 .post-actions button .reaction-label{display:inline;white-space:nowrap}.post-actions .reaction-count{font-variant-numeric:tabular-nums}
+
+
+/* Private operator feedback remains inline, away from the public composer. */
+.feedback{width:calc(100% - 40px);max-width:760px;margin:24px auto;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--ink);text-align:left}
+.feedback summary{cursor:pointer;min-height:48px;align-content:center;padding:12px 18px;font-size:14px;font-weight:650;color:#245a72}
+.feedback[open] summary{border-bottom:1px solid var(--line)}
+.feedback form{padding:0 18px 16px}.feedback-intro{font-size:14px;line-height:1.8}.feedback-notice{font-size:12px;line-height:1.85;color:var(--muted)}
+.feedback label{display:block;font-size:14px;font-weight:650;margin:16px 0 7px}.feedback select,.feedback textarea{display:block;width:100%;min-width:0;border:1px solid #9abac9;border-radius:10px;background:#fff;color:var(--ink);font:inherit;font-size:16px;padding:10px 12px}.feedback select{min-height:48px}.feedback textarea{min-height:110px;resize:vertical;line-height:1.8}.feedback textarea::placeholder{color:#607b89}.feedback textarea:disabled,.feedback select:disabled{opacity:.75}.feedback-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}.feedback-actions>span{font-size:12px;color:var(--muted)}.feedback-actions>span.feedback-over-limit{color:#a33c2c}.feedback-actions .primary{padding:10px 18px}.feedback-status,.feedback-error{font-size:14px;line-height:1.8;overflow-wrap:anywhere}.feedback-status:empty{margin:0}.feedback-error{color:#963e28;background:#fff4ed;border:1px solid #dfb4a3;padding:10px;border-radius:8px}.feedback :focus-visible{outline:3px solid #15779c;outline-offset:3px}.feedback summary{scroll-margin-top:calc(var(--room-header-height, 0px) + env(safe-area-inset-top) + 12px)}
+@media(max-width:740px){.feedback{width:calc(100% - 24px);margin:20px auto}.feedback form{padding:0 14px 14px}.feedback summary{padding:12px 14px}}
