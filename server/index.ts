@@ -1,10 +1,9 @@
 import { congestionSummary, validCongestion } from './congestion';
 import { CONGESTION_LABELS } from '../src/congestion';
-import { feedbackRoute, cleanFeedback } from './feedback';
 import { Metrics } from './metrics';
 import { LIMITS, cleanRates, networkKeys, type RateState } from './limits';
 import { TICKET_MS, VISIBLE_MS, QUARANTINE_MS, locationStatus, postingAllowed, retained, validText, visible, type Session, type Post, type Reaction } from './domain';
-interface Env { PLAZA: DurableObjectNamespace; ENVIRONMENT?: string; FEEDBACK_ADMIN_TOKEN?: string; ASSETS?: Fetcher }
+interface Env { PLAZA: DurableObjectNamespace; ENVIRONMENT?: string; ASSETS?: Fetcher }
 interface Snapshot { sessions: [string,Session][]; posts: Post[]; rates?: RateState }
 interface Report { post:Post; reportedAt:number; reporters:string[]; networks:string[]; salt?:string; quarantined:boolean }
 interface Usage { expiresAt:number; minute:number; reads:number; mutations:number; renewals:number; connections:number; reportWindow:number; reports:number }
@@ -156,7 +155,6 @@ export class Plaza {
  }
  private async route(request:Request,body:any):Promise<Response>{
   const url=new URL(request.url),path=url.pathname,method=request.method,now=Date.now();
-  const feedback=await feedbackRoute(request,body,this.state.storage,this.env.FEEDBACK_ADMIN_TOKEN);if(feedback)return feedback;
   if(path==='/api/session'&&method==='POST'){
    this.clean(now);
    if(body.passenger!==true)throw new ApiError(400,'運転していない同乗者のみ参加できます');
@@ -211,5 +209,5 @@ export class Plaza {
   }
   throw new ApiError(404,'見つかりません');
  }
- async alarm(){await this.ready;await this.serial(async()=>{try{await cleanFeedback(this.state.storage,Date.now());this.metrics.flush();this.clean();await this.save();for(const [id,u]of Object.entries(this.usage))if(u.expiresAt<=Date.now())delete this.usage[id];await this.state.storage.put('usage-v1',this.usage);this.broadcast();}finally{await this.state.storage.setAlarm(Date.now()+60_000);}});}
+ async alarm(){await this.ready;await this.serial(async()=>{try{this.metrics.flush();this.clean();await this.save();for(const [id,u]of Object.entries(this.usage))if(u.expiresAt<=Date.now())delete this.usage[id];await this.state.storage.put('usage-v1',this.usage);this.broadcast();}finally{await this.state.storage.setAlarm(Date.now()+60_000);}});}
 }

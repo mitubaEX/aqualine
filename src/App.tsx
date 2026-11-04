@@ -1,4 +1,3 @@
-import AdminFeedback from './AdminFeedback';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import Feedback from './Feedback';
@@ -118,4 +117,4 @@ function MainApp() {
 }
 
 
-export default function App(){return location.pathname==='/feedback-admin'?<AdminFeedback/>:<MainApp/>;}
+export default function App(){return <MainApp/>;}

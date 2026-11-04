@@ -1,16 +1,9 @@
 import assert from 'node:assert/strict';
 const base=process.env.API_URL||'http://127.0.0.1:5175';
 assert.ok(['127.0.0.1','localhost'].includes(new URL(base).hostname),'Synthetic congestion is local-only');
-const admin='local-dummy-feedback-key-not-production-12345';
 async function api(path,body,token,method=body?'POST':'GET'){
  const r=await fetch(base+'/api'+path,{method,headers:{Origin:base,...(token?{Authorization:'Bearer '+token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json()};
 }
-const f={category:'bug',text:'ローカル結合検証用・公開されない送信',idempotencyKey:crypto.randomUUID()};
-assert.equal((await api('/admin/feedback')).status,401);
-const sent=await api('/feedback',f);assert.equal(sent.status,201);
-assert.equal((await api('/feedback',f)).data.id,sent.data.id);
-const inbox=await api('/admin/feedback',undefined,admin);assert.equal(inbox.status,200);assert.equal(inbox.data.feedback.find(x=>x.id===sent.data.id).text,f.text);
-assert.equal((await api('/admin/feedback/'+sent.data.id+'/reviewed',{},admin)).status,200);
 const people=[],posts=[];
 try{
  for(let i=0;i<3;i++){
@@ -18,8 +11,8 @@ try{
   const p=await api('/posts',{congestion:'moving'},s.data.token);assert.equal(p.status,201);posts.push([s.data.token,p.data.id]);
  }
  const summary=await api('/congestion');assert.equal(summary.status,200);const d=summary.data.directions.find(x=>x.direction==='kisarazu');assert.ok(d.sampleSize>=3);assert.ok(d.counts.moving>=3);
- assert.ok(!JSON.stringify(summary.data).includes('authorId'));assert.ok(!JSON.stringify(summary.data).includes(f.text));
- console.log('PASS real local feedback submit/dedup/auth/review; congestion-only posts and public aggregate');
+ assert.ok(!JSON.stringify(summary.data).includes('authorId'));
+ console.log('PASS real local congestion-only posts and public aggregate');
 }finally{
  for(const [token,id] of posts)assert.equal((await api('/posts/'+id,undefined,token,'DELETE')).status,200);
  for(const token of people)assert.equal((await api('/session/revoke',{},token)).status,200);

@@ -119,3 +119,10 @@
 - 型検査・build・72件のサーバーテスト・18件のブラウザテスト成功。開発StrictModeによる初回リクエストの中断・再実行をテストで考慮。
 - 既存HTTP/WebSocket結合、新しいフィードバック送信・重複抑止・管理認証・確認済み化、混雑のみ投稿・匿名集計をローカルWorker/DOで検証。合成混雑投稿・参加券は清掃。フィードバック検証データは隔離したローカル保存のみ。
 - 本番管理キーの設定と公開後検証は未完了。この記録は公開済みを意味しない。
+
+## 2026-11-04 Google Forms replacement
+
+- Replaced the unpublished custom feedback API/admin UI with the approved Google Forms link. No ticket/location parameters or Referer are sent. Anonymous form GET returned 200 with the AquaLine feedback title; no form response was submitted and no Google settings were changed.
+- Preserved 24-hour posts, four congestion labels and the public directional aggregate. Existing stored posts/reports are not migrated or deleted.
+- Passed typecheck/build, 61 server tests, 15 browser tests, HTTP/WebSocket integration and real local congestion integration. Verified the link at 320/390px and congestion-only posting/deletion/exit. Initial browser connection failures were resolved by restarting the stopped local servers.
+- No production feedback secret is configured. Real Android/iOS/GPS and actual Google Forms response submission remain untested.
