@@ -42,3 +42,46 @@ test('participant can submit congestion without text and delete the test post',a
  const mine=page.locator('article').filter({has:page.locator('.you')}).filter({has:page.locator('.congestion-tag',{hasText:'動いてる'})});await expect(mine).toHaveCount(1);await expect(mine.locator('.post-text')).toHaveText('動いてる');
  page.on('dialog',d=>d.accept());await mine.getByRole('button',{name:/投稿メニュー/}).click();await page.getByRole('button',{name:'自分の投稿を削除'}).click();await expect(mine).toHaveCount(0);await page.getByRole('button',{name:'退出する',exact:true}).click();await expect(page.locator('.plaza')).toHaveCount(0);
 });
+
+
+test('optional congestion follows send controls on mobile and desktop, with keyboard and combined submission', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('checkbox').check();
+  await page.getByText('開発・動作確認用', { exact: true }).click();
+  await page.getByRole('button', { name: 'テスト位置で入る（開発専用）' }).click();
+  await expect(page.locator('.plaza')).toBeVisible();
+  const send = page.getByRole('button', { name: 'ひとこと送る' });
+  const choices = page.getByRole('group', { name: 'いまの混雑状況（任意）' });
+  const moving = choices.getByRole('button', { name: '動いてる', exact: true });
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await choices.scrollIntoViewIfNeeded();
+    const sendBox = await send.boundingBox();
+    const choicesBox = await choices.boundingBox();
+    expect(choicesBox!.y).toBeGreaterThanOrEqual(sendBox!.y + sendBox!.height);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    expect((await moving.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await page.screenshot({ path: `previews/congestion-below-${width}.png` });
+  }
+  await expect(send).toBeDisabled();
+  await moving.focus();
+  await page.keyboard.press('Space');
+  await expect(moving).toHaveAttribute('aria-pressed', 'true');
+  await expect(send).toBeEnabled();
+  await page.keyboard.press('Space');
+  await expect(moving).toHaveAttribute('aria-pressed', 'false');
+  await expect(send).toBeDisabled();
+  await moving.click();
+  const text = '補助の混雑情報 QA ' + Date.now();
+  await page.getByLabel('ひとこと', { exact: true }).fill(text);
+  await send.click();
+  const mine = page.locator('article').filter({ hasText: text });
+  await expect(mine.locator('.congestion-tag')).toHaveText('動いてる');
+  await expect(moving).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByLabel('ひとこと', { exact: true })).toHaveValue('');
+  page.on('dialog', d => d.accept());
+  await mine.getByRole('button', { name: /投稿メニュー/ }).click();
+  await page.getByRole('button', { name: '自分の投稿を削除' }).click();
+  await expect(mine).toHaveCount(0);
+  await page.getByRole('button', { name: '退出する', exact: true }).click();
+});
