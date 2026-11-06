@@ -126,3 +126,13 @@
 - Preserved 24-hour posts, four congestion labels and the public directional aggregate. Existing stored posts/reports are not migrated or deleted.
 - Passed typecheck/build, 61 server tests, 15 browser tests, HTTP/WebSocket integration and real local congestion integration. Verified the link at 320/390px and congestion-only posting/deletion/exit. Initial browser connection failures were resolved by restarting the stopped local servers.
 - No production feedback secret is configured. Real Android/iOS/GPS and actual Google Forms response submission remain untested.
+
+## 2026-11-06: Optional congestion below the composer (deployed)
+
+- Based on GitHub main `12c672f` and a clean original checkout. The previous live HTML referenced the same JS/CSS assets as that checkout's build; no unrelated pending source changes were included.
+- Code commit `4471f81`: moved the optional congestion selector below the send controls, outside the mobile sticky composer; reduced visual emphasis while retaining 44px touch targets, keyboard selection and congestion-only/combined submission.
+- Build/typecheck, 61 unit tests and all 16 browser E2E tests passed. The layout test covered 320/390/1280px, no horizontal overflow, keyboard toggling, combined submission/reset and cleanup. A subsequent single-test run regenerated viewport screenshots and passed.
+- Pushed code to GitHub main and deployed existing production Worker `aqualine-mvp` at https://aqualine-mvp.mituba.workers.dev . Cloudflare version `2da8db33-41bd-4052-91f1-2c39ee32dd4f` is confirmed at 100%; previous version was `8a4061ea-9a1d-4d77-bb1e-5164f1a469bf`.
+- Public smoke checks passed: HTTP 200/current JS asset, anonymous congestion summary, unauthenticated posts 401, development bypass 403, synthetic GPS admission, WebSocket LIVE, 320/390/1280px order/no overflow, optional selection and text-based send enablement, exit and subsequent ticket 401. No browser runtime errors.
+- No production posts or congestion responses were submitted. The dedicated synthetic-position ticket was revoked. No other users' data was modified; screenshots mask the timeline and participant name.
+- Actual production submission remains covered by local E2E only for this release. Real iOS/Android devices and on-site GPS were not tested. No backend/configuration/migration changes were made.
