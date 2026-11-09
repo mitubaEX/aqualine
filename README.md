@@ -6,7 +6,9 @@
 
 > **乗客向けの非公式サービスです。** 運転者は渋滞中・停車中も利用対象外です。現地の位置判定や実スマートフォンでの動作は未検証です。
 
-**公開URL：[AquaLine を開く](https://aqualine-mvp.mituba.workers.dev)**
+**公開URL：[AquaLine を開く](https://aqualine.mitubaex.com)**
+
+旧URL `https://aqualine-mvp.mituba.workers.dev` も引き続き利用できます。両URLは同じWorker・Durable Objectの保存先を使用します。参加状態はブラウザのオリジンごとに保持するため、新URLでは位置情報の許可・参加確認が改めて必要です。
 
 Cloudflare Workers と SQLite-backed Durable Objects を使用し、2026-10-29に Workers Free プランで公開しました。公開版の参加には範囲内の位置確認が必要で、模擬位置ボタンはありません。[保存先・費用・運用手順](docs/technical-notes.md)も確認してください。
 
